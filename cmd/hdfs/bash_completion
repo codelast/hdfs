@@ -2,25 +2,45 @@
 
 _hdfs_complete()
 {
-    local cur prev opts
+    local cur prev opts cmd alias_expanded
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    words=$(IFS=$' '; echo "${COMP_WORDS[@]:0:COMP_CWORD+1}")
-    opts=$(${COMP_WORDS[0]} complete "$words")
-
-    if [[ $opts == "_FILE_" ]]
-    then
-      COMPREPLY=( $(compgen -o default -- ${cur}) )
+    cmd="${COMP_WORDS[0]}"
+    if alias "$cmd" >/dev/null 2>&1; then
+        alias_expanded=$(alias "$cmd" | sed -E "s/.*='([^']*)'.*/\1/")
+        # 构建虚拟命令行：别名展开 + 用户输入的额外参数
+        words="$alias_expanded $(IFS=$' '; echo "${COMP_WORDS[@]:1:COMP_CWORD}")"
+        cmd="hdfs"
     else
-      COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        words=$(IFS=$' '; echo "${COMP_WORDS[@]:0:COMP_CWORD+1}")
+    fi
+    opts=$($cmd complete "$words")
+
+    if [[ $opts == "_FILE_" ]]; then
+        # 对于HDFS路径补全，需要调用hdfs来获取实际补全选项
+        opts=$($cmd complete "$words$cur")
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    else
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
     fi
 
-    if [[ $COMPREPLY != "" && $COMPREPLY != */ && $COMP_POINT == ${#COMP_LINE} ]]
-    then
+    if [[ ${#COMPREPLY[@]} -eq 1 && $COMPREPLY != */ && $COMP_POINT == ${#COMP_LINE} ]]; then
       COMPREPLY="$COMPREPLY "
     fi
 
     return 0
 }
 
+# 支持命名别名后的补全，例如 .bashrc中定义的 alias hls='hdfs ls -la'
 complete -o nospace -F _hdfs_complete hdfs
+complete -o nospace -F _hdfs_complete hls
+complete -o nospace -F _hdfs_complete hget
+complete -o nospace -F _hdfs_complete hput
+complete -o nospace -F _hdfs_complete hmv
+complete -o nospace -F _hdfs_complete hcat
+complete -o nospace -F _hdfs_complete hdus
+complete -o nospace -F _hdfs_complete hrm
+complete -o nospace -F _hdfs_complete hrmr
+complete -o nospace -F _hdfs_complete hmkdir
+complete -o nospace -F _hdfs_complete htouchz
+complete -o nospace -F _hdfs_complete htail
